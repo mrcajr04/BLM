@@ -21,7 +21,6 @@ const logCallBtn = document.getElementById('log-call-btn');
 const templateModal = document.getElementById('template-modal');
 const reviewModal = document.getElementById('review-modal');
 const deleteModal = document.getElementById('delete-modal');
-const deleteConfirmInput = document.getElementById('delete-confirmation');
 const confirmDeleteBtn = document.getElementById('confirm-delete');
 const templatesTableBody = document.getElementById('templates-table-body');
 const reviewsTableBody = document.getElementById('reviews-table-body');
@@ -69,6 +68,8 @@ document.querySelectorAll('.modal-close').forEach(button => {
 // Templates CRUD Operations
 let currentDeleteId = null;
 let currentDeleteType = null;
+let isModifying = false;
+let modifyingId = null;
 
 // Authentication state observer
 auth.onAuthStateChanged((user) => {
@@ -166,16 +167,28 @@ function setupUserData(user) {
 async function createTemplate(name, message) {
     if (!auth.currentUser) return;
     try {
-        await addDoc(collection(db, "templates"), {
-            name,
-            message,
-            userId: auth.currentUser.uid,
-            createdAt: new Date()
-        });
+        if (isModifying && modifyingId) {
+            // Update existing template
+            await updateDoc(doc(db, "templates", modifyingId), {
+                name,
+                message,
+                updatedAt: new Date()
+            });
+        } else {
+            // Create new template
+            await addDoc(collection(db, "templates"), {
+                name,
+                message,
+                userId: auth.currentUser.uid,
+                createdAt: new Date()
+            });
+        }
         hideModal(templateModal);
+        isModifying = false;
+        modifyingId = null;
     } catch (error) {
-        console.error("Error creating template:", error);
-        alert("Error creating template. Please try again.");
+        console.error("Error with template:", error);
+        alert("Error saving template. Please try again.");
     }
 }
 
@@ -217,8 +230,9 @@ function renderTemplate(doc) {
         document.getElementById('template-modal-title').textContent = 'Modify Template';
         document.getElementById('template-name').value = doc.data().name;
         document.getElementById('template-message').value = doc.data().message;
+        isModifying = true;
+        modifyingId = doc.id;
         showModal(templateModal);
-        currentDeleteId = doc.id;
     });
 
     // Delete functionality
@@ -235,44 +249,58 @@ function renderTemplate(doc) {
 async function createReview(date, link, description, quality) {
     if (!auth.currentUser) return;
     try {
-        await addDoc(collection(db, "callReviews"), {
-            date,
-            link,
-            description,
-            quality,
-            userId: auth.currentUser.uid,
-            createdAt: new Date()
-        });
+        if (isModifying && modifyingId) {
+            // Update existing review
+            await updateDoc(doc(db, "callReviews", modifyingId), {
+                date,
+                link,
+                description,
+                quality,
+                updatedAt: new Date()
+            });
+        } else {
+            // Create new review
+            await addDoc(collection(db, "callReviews"), {
+                date,
+                link,
+                description,
+                quality,
+                userId: auth.currentUser.uid,
+                createdAt: new Date()
+            });
+        }
         hideModal(reviewModal);
+        isModifying = false;
+        modifyingId = null;
     } catch (error) {
-        console.error("Error creating review:", error);
-        alert("Error creating review. Please try again.");
+        console.error("Error with review:", error);
+        alert("Error saving review. Please try again.");
     }
 }
 
 function renderReview(doc) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-        <td class="px-6 py-4 whitespace-nowrap w-32">
+        <td class="px-6 py-4 whitespace-nowrap">
             <div class="text-sm text-gray-900">${doc.data().date}</div>
         </td>
         <td class="px-6 py-4 whitespace-normal break-words w-48">
-            <div class="flex items-center space-x-2">
-                <a href="${doc.data().link}" target="_blank" class="text-blue-600 hover:text-blue-900 truncate">
+            <div class="flex items-center">
+                <a href="${doc.data().link}" target="_blank" class="text-blue-600 hover:text-blue-900 text-sm truncate max-w-[200px] block" title="${doc.data().link}">
                     ${doc.data().link}
                 </a>
-                <button class="text-blue-600 hover:text-blue-900 copy-link-btn" title="Copy link">
-                    <i class="fas fa-copy"></i>
-                </button>
             </div>
         </td>
-        <td class="px-6 py-4 whitespace-normal break-words flex-1">
+        <td class="px-6 py-4 whitespace-normal break-words">
             <div class="text-sm text-gray-500">${doc.data().description}</div>
         </td>
-        <td class="px-6 py-4 whitespace-nowrap w-24">
+        <td class="px-6 py-4 whitespace-nowrap">
             <div class="text-sm text-gray-900">${doc.data().quality}</div>
         </td>
-        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium w-32">
+        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+            <button class="text-blue-600 hover:text-blue-900 mr-3 copy-link-btn" title="Copy link">
+                <i class="fas fa-copy"></i>
+            </button>
             <button class="text-indigo-600 hover:text-indigo-900 mr-3 modify-btn">
                 <i class="fas fa-edit"></i>
             </button>
@@ -300,8 +328,9 @@ function renderReview(doc) {
         document.getElementById('review-link').value = doc.data().link;
         document.getElementById('review-description').value = doc.data().description;
         document.getElementById('review-quality').value = doc.data().quality;
+        isModifying = true;
+        modifyingId = doc.id;
         showModal(reviewModal);
-        currentDeleteId = doc.id;
     });
 
     // Delete functionality
@@ -332,23 +361,21 @@ reviewSearch.addEventListener('input', (e) => {
 });
 
 // Delete confirmation
-deleteConfirmInput.addEventListener('input', (e) => {
-    confirmDeleteBtn.disabled = e.target.value !== 'DELETE';
-});
-
 confirmDeleteBtn.addEventListener('click', async () => {
-    if (currentDeleteId && currentDeleteType) {
-        try {
-            const docRef = doc(db, currentDeleteType === 'template' ? 'templates' : 'callReviews', currentDeleteId);
-            await deleteDoc(docRef);
-            hideModal(deleteModal);
-            deleteConfirmInput.value = '';
-            currentDeleteId = null;
-            currentDeleteType = null;
-        } catch (error) {
-            console.error("Error deleting document:", error);
-            alert("Error deleting document. Please try again.");
+    if (!currentDeleteId) return;
+    
+    try {
+        if (currentDeleteType === 'template') {
+            await deleteDoc(doc(db, "templates", currentDeleteId));
+        } else if (currentDeleteType === 'review') {
+            await deleteDoc(doc(db, "callReviews", currentDeleteId));
         }
+        hideModal(deleteModal);
+        currentDeleteId = null;
+        currentDeleteType = null;
+    } catch (error) {
+        console.error("Error deleting item:", error);
+        alert("Error deleting item. Please try again.");
     }
 });
 
@@ -372,10 +399,14 @@ document.getElementById('review-form').addEventListener('submit', async (e) => {
 // New item buttons
 newTemplateBtn.addEventListener('click', () => {
     document.getElementById('template-modal-title').textContent = 'New Template';
+    isModifying = false;
+    modifyingId = null;
     showModal(templateModal);
 });
 
 logCallBtn.addEventListener('click', () => {
     document.getElementById('review-modal-title').textContent = 'Log Call';
+    isModifying = false;
+    modifyingId = null;
     showModal(reviewModal);
 }); 
