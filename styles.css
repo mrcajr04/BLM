@@ -1,0 +1,107 @@
+/* Custom styles to complement Tailwind CSS */
+
+/* Smooth transitions for modals */
+.modal {
+    transition: opacity 0.15s ease-in-out;
+}
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #666;
+}
+
+/* Table styles */
+table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+/* Ensure tables have proper text wrapping */
+td div {
+    max-width: 100%;
+    word-break: break-word;
+}
+
+/* Link cell styles */
+td .truncate {
+    max-width: calc(100% - 2rem);
+    display: inline-block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Description cell styles */
+td.flex-1 {
+    width: auto;
+    min-width: 0;
+}
+
+/* Smooth hover transitions */
+button {
+    transition: all 0.2s ease-in-out;
+}
+
+/* Custom focus styles */
+input:focus, textarea:focus, select:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+}
+
+/* Toast notification styles */
+.toast {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    padding: 1rem;
+    background: #4b5563;
+    color: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    z-index: 50;
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+}
+
+.toast.show {
+    opacity: 1;
+}
+
+/* Ensure modals are centered and have proper z-index */
+.modal > div {
+    z-index: 60;
+}
+
+/* Custom animation for delete confirmation input */
+#delete-confirmation:invalid {
+    border-color: #ef4444;
+}
+
+#delete-confirmation:valid {
+    border-color: #10b981;
+}
+
+/* Ensure proper spacing in table cells */
+td {
+    vertical-align: middle;
+}
+
+/* Custom styles for action buttons */
+.copy-btn:hover, .modify-btn:hover, .delete-btn:hover, .copy-link-btn:hover {
+    transform: scale(1.1);
+} 
