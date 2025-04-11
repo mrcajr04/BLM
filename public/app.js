@@ -14,8 +14,10 @@ import {
 // DOM Elements
 const templatesTab = document.getElementById('templates-tab');
 const reviewsTab = document.getElementById('reviews-tab');
+const bookingsTab = document.getElementById('bookings-tab');
 const templateSearch = document.getElementById('template-search');
 const reviewSearch = document.getElementById('review-search');
+const bookingSearch = document.getElementById('booking-search');
 const newTemplateBtn = document.getElementById('new-template-btn');
 const logCallBtn = document.getElementById('log-call-btn');
 const templateModal = document.getElementById('template-modal');
@@ -24,11 +26,13 @@ const deleteModal = document.getElementById('delete-modal');
 const confirmDeleteBtn = document.getElementById('confirm-delete');
 const templatesTableBody = document.getElementById('templates-table-body');
 const reviewsTableBody = document.getElementById('reviews-table-body');
+const bookingsTableBody = document.getElementById('bookings-table-body');
 const mainContent = document.getElementById('main-content');
 const loginBtn = document.getElementById('login-btn');
 const logoutBtn = document.getElementById('logout-btn');
 const userInfo = document.getElementById('user-info');
 const welcomeMessage = document.getElementById('welcome-message');
+const newBookingBtn = document.getElementById('new-booking-btn');
 
 // Tab Switching
 document.querySelectorAll('.tab-button').forEach(button => {
@@ -101,10 +105,6 @@ loginBtn.addEventListener('click', () => {
                 case 'auth/popup-blocked':
                     errorMessage += "Popup was blocked by your browser. Please allow popups for this site.";
                     break;
-                case 'auth/popup-closed-by-user':
-                    return; // Don't show error for user-closed popup
-                case 'auth/cancelled-popup-request':
-                    return; // Don't show error for cancelled requests
                 default:
                     errorMessage += "Please try again later.";
             }
@@ -133,6 +133,7 @@ function hideUserInfo() {
 function clearTableData() {
     templatesTableBody.innerHTML = '';
     reviewsTableBody.innerHTML = '';
+    bookingsTableBody.innerHTML = '';
 }
 
 function setupUserData(user) {
@@ -144,6 +145,11 @@ function setupUserData(user) {
 
     const reviewsQuery = query(
         collection(db, "callReviews"),
+        where("userId", "==", user.uid)
+    );
+
+    const bookingsQuery = query(
+        collection(db, "bookings"),
         where("userId", "==", user.uid)
     );
 
@@ -159,6 +165,16 @@ function setupUserData(user) {
         reviewsTableBody.innerHTML = '';
         snapshot.docs.forEach(doc => {
             reviewsTableBody.appendChild(renderReview(doc));
+        });
+    });
+
+    onSnapshot(bookingsQuery, (snapshot) => {
+        bookingsTableBody.innerHTML = '';
+        const sortedDocs = snapshot.docs.sort((a, b) => {
+            return a.data().createdAt.toMillis() - b.data().createdAt.toMillis();
+        });
+        sortedDocs.forEach(doc => {
+            bookingsTableBody.appendChild(renderBooking(doc));
         });
     });
 }
@@ -343,6 +359,101 @@ function renderReview(doc) {
     return tr;
 }
 
+// Bookings CRUD Operations
+async function createBooking() {
+    if (!auth.currentUser) return;
+    try {
+        const today = new Date();
+        // Format date as YYYY-MM-DD in local timezone
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+        const day = String(today.getDate()).padStart(2, '0');
+        const todayFormatted = `${year}-${month}-${day}`;
+
+        const newBooking = {
+            date: todayFormatted,
+            lead: '',
+            type: 'regular',
+            client: '',
+            userId: auth.currentUser.uid,
+            createdAt: today // Keep using the full Date object for sorting
+        };
+        await addDoc(collection(db, "bookings"), newBooking);
+    } catch (error) {
+        console.error("Error creating booking:", error);
+        alert("Error creating booking. Please try again.");
+    }
+}
+
+async function updateBooking(bookingId, field, value) {
+    if (!auth.currentUser) return;
+    try {
+        const updateData = {};
+        updateData[field] = value;
+        updateData.updatedAt = new Date();
+        await updateDoc(doc(db, "bookings", bookingId), updateData);
+    } catch (error) {
+        console.error("Error updating booking:", error);
+        alert("Error updating booking. Please try again.");
+    }
+}
+
+function renderBooking(doc) {
+    const tr = document.createElement('tr');
+    const data = doc.data();
+    
+    tr.innerHTML = `
+        <td class="px-6 py-4 whitespace-nowrap">
+            <input type="date" 
+                   class="text-sm text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none" 
+                   value="${data.date}"
+                   data-field="date">
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap">
+            <input type="text" 
+                   class="text-sm text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none w-full" 
+                   value="${data.lead}"
+                   placeholder="Enter lead name"
+                   data-field="lead">
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap">
+            <select class="text-sm text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none"
+                    data-field="type">
+                <option value="regular" ${data.type === 'regular' ? 'selected' : ''}>Regular</option>
+                <option value="prepay" ${data.type === 'prepay' ? 'selected' : ''}>Prepay</option>
+            </select>
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap">
+            <input type="text" 
+                   class="text-sm text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none w-full" 
+                   value="${data.client}"
+                   placeholder="Enter client name"
+                   data-field="client">
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+            <button class="text-red-600 hover:text-red-900 delete-booking">
+                <i class="fas fa-trash"></i>
+            </button>
+        </td>
+    `;
+
+    // Add event listeners for inline editing
+    tr.querySelectorAll('input, select').forEach(input => {
+        input.addEventListener('change', (e) => {
+            updateBooking(doc.id, e.target.dataset.field, e.target.value);
+        });
+    });
+
+    // Add delete event listener
+    tr.querySelector('.delete-booking').addEventListener('click', () => {
+        currentDeleteId = doc.id;
+        currentDeleteType = 'booking';
+        showModal(deleteModal);
+    });
+
+    return tr;
+}
+
 // Search functionality
 templateSearch.addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase();
@@ -362,13 +473,15 @@ reviewSearch.addEventListener('input', (e) => {
 
 // Delete confirmation
 confirmDeleteBtn.addEventListener('click', async () => {
-    if (!currentDeleteId) return;
+    if (!currentDeleteId || !currentDeleteType) return;
     
     try {
         if (currentDeleteType === 'template') {
             await deleteDoc(doc(db, "templates", currentDeleteId));
         } else if (currentDeleteType === 'review') {
             await deleteDoc(doc(db, "callReviews", currentDeleteId));
+        } else if (currentDeleteType === 'booking') {
+            await deleteDoc(doc(db, "bookings", currentDeleteId));
         }
         hideModal(deleteModal);
         currentDeleteId = null;
@@ -409,4 +522,18 @@ logCallBtn.addEventListener('click', () => {
     isModifying = false;
     modifyingId = null;
     showModal(reviewModal);
+});
+
+// Add event listener for new booking button
+newBookingBtn.addEventListener('click', createBooking);
+
+// Add search functionality for bookings
+bookingSearch.addEventListener('input', (e) => {
+    const searchTerm = e.target.value.toLowerCase();
+    const rows = bookingsTableBody.getElementsByTagName('tr');
+    
+    Array.from(rows).forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(searchTerm) ? '' : 'none';
+    });
 }); 
