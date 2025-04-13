@@ -15,6 +15,7 @@ import {
 const templatesTab = document.getElementById('templates-tab');
 const reviewsTab = document.getElementById('reviews-tab');
 const bookingsTab = document.getElementById('bookings-tab');
+const remindersTab = document.getElementById('reminders-tab');
 const templateSearch = document.getElementById('template-search');
 const reviewSearch = document.getElementById('review-search');
 const bookingSearch = document.getElementById('booking-search');
@@ -134,6 +135,7 @@ function clearTableData() {
     templatesTableBody.innerHTML = '';
     reviewsTableBody.innerHTML = '';
     bookingsTableBody.innerHTML = '';
+    // Clear reminders tab content when implemented
 }
 
 function setupUserData(user) {
@@ -188,6 +190,7 @@ async function createTemplate(name, message) {
             await updateDoc(doc(db, "templates", modifyingId), {
                 name,
                 message,
+                type: document.getElementById('template-type').value,
                 updatedAt: new Date()
             });
         } else {
@@ -195,6 +198,7 @@ async function createTemplate(name, message) {
             await addDoc(collection(db, "templates"), {
                 name,
                 message,
+                type: document.getElementById('template-type').value,
                 userId: auth.currentUser.uid,
                 createdAt: new Date()
             });
@@ -210,12 +214,16 @@ async function createTemplate(name, message) {
 
 function renderTemplate(doc) {
     const tr = document.createElement('tr');
+    const data = doc.data();
     tr.innerHTML = `
-        <td class="px-6 py-4 whitespace-normal break-words w-48">
-            <div class="text-sm text-gray-900 truncate">${doc.data().name}</div>
+        <td class="px-6 py-4 whitespace-normal break-words w-40">
+            <div class="text-sm text-gray-900">${data.name}</div>
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap w-40">
+            <div class="text-sm text-gray-900">${data.type === 'sms' ? 'SMS Template' : 'Call Template'}</div>
         </td>
         <td class="px-6 py-4 whitespace-normal break-words flex-1">
-            <div class="text-sm text-gray-500">${doc.data().message}</div>
+            <div class="text-sm text-gray-500 line-clamp-2">${data.message}</div>
         </td>
         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium w-32">
             <button class="text-blue-600 hover:text-blue-900 mr-3 copy-btn" title="Copy message">
@@ -232,7 +240,7 @@ function renderTemplate(doc) {
 
     // Copy functionality
     tr.querySelector('.copy-btn').addEventListener('click', (e) => {
-        navigator.clipboard.writeText(doc.data().message);
+        navigator.clipboard.writeText(data.message);
         const button = e.currentTarget;
         const originalIcon = button.innerHTML;
         button.innerHTML = '<i class="fas fa-check"></i>';
@@ -244,8 +252,9 @@ function renderTemplate(doc) {
     // Modify functionality
     tr.querySelector('.modify-btn').addEventListener('click', () => {
         document.getElementById('template-modal-title').textContent = 'Modify Template';
-        document.getElementById('template-name').value = doc.data().name;
-        document.getElementById('template-message').value = doc.data().message;
+        document.getElementById('template-name').value = data.name;
+        document.getElementById('template-type').value = data.type || 'sms';
+        document.getElementById('template-message').value = data.message;
         isModifying = true;
         modifyingId = doc.id;
         showModal(templateModal);
@@ -498,6 +507,7 @@ document.getElementById('template-form').addEventListener('submit', async (e) =>
     const name = document.getElementById('template-name').value;
     const message = document.getElementById('template-message').value;
     await createTemplate(name, message);
+    document.getElementById('template-form').reset();
 });
 
 document.getElementById('review-form').addEventListener('submit', async (e) => {
