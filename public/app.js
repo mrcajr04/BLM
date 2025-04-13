@@ -34,6 +34,7 @@ const logoutBtn = document.getElementById('logout-btn');
 const userInfo = document.getElementById('user-info');
 const welcomeMessage = document.getElementById('welcome-message');
 const newBookingBtn = document.getElementById('new-booking-btn');
+const downloadCsvBtn = document.getElementById('download-csv-btn');
 
 // Tab Switching
 document.querySelectorAll('.tab-button').forEach(button => {
@@ -375,7 +376,7 @@ async function createBooking() {
         const today = new Date();
         // Format date as YYYY-MM-DD in local timezone
         const year = today.getFullYear();
-        const month = String(today.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+        const month = String(today.getMonth() + 1).padStart(2, '0');
         const day = String(today.getDate()).padStart(2, '0');
         const todayFormatted = `${year}-${month}-${day}`;
 
@@ -385,7 +386,8 @@ async function createBooking() {
             type: 'regular',
             client: '',
             userId: auth.currentUser.uid,
-            createdAt: today // Keep using the full Date object for sorting
+            createdAt: today,
+            updatedAt: today
         };
         await addDoc(collection(db, "bookings"), newBooking);
     } catch (error) {
@@ -411,12 +413,20 @@ function renderBooking(doc) {
     const tr = document.createElement('tr');
     const data = doc.data();
     
+    // Get today's date in YYYY-MM-DD format
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayFormatted = `${year}-${month}-${day}`;
+    
     tr.innerHTML = `
         <td class="px-6 py-4 whitespace-nowrap">
             <input type="date" 
-                   class="text-sm text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none" 
-                   value="${data.date}"
-                   data-field="date">
+                   class="text-sm text-gray-900 bg-gray-50 border-b border-transparent cursor-not-allowed" 
+                   value="${todayFormatted}"
+                   data-field="date"
+                   disabled>
         </td>
         <td class="px-6 py-4 whitespace-nowrap">
             <input type="text" 
@@ -446,8 +456,8 @@ function renderBooking(doc) {
         </td>
     `;
 
-    // Add event listeners for inline editing
-    tr.querySelectorAll('input, select').forEach(input => {
+    // Add event listeners for inline editing (excluding date field)
+    tr.querySelectorAll('input:not([type="date"]), select').forEach(input => {
         input.addEventListener('change', (e) => {
             updateBooking(doc.id, e.target.dataset.field, e.target.value);
         });
@@ -546,4 +556,73 @@ bookingSearch.addEventListener('input', (e) => {
         const text = row.textContent.toLowerCase();
         row.style.display = text.includes(searchTerm) ? '' : 'none';
     });
+});
+
+// CSV Export functionality
+function convertToCSV(bookings) {
+    // CSV headers
+    const headers = ['Date', 'Lead', 'Type', 'Client'];
+    
+    // Convert bookings to CSV rows
+    const rows = bookings.map(booking => [
+        booking.date,
+        booking.lead,
+        booking.type,
+        booking.client
+    ]);
+    
+    // Combine headers and rows
+    return [headers, ...rows]
+        .map(row => row.map(cell => `"${cell}"`).join(','))
+        .join('\n');
+}
+
+function downloadCSV(csvContent, filename) {
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    
+    // Create download link
+    if (navigator.msSaveBlob) { // IE 10+
+        navigator.msSaveBlob(blob, filename);
+    } else {
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+}
+
+// Add event listener for CSV download
+downloadCsvBtn.addEventListener('click', async () => {
+    try {
+        const bookingsSnapshot = await getDocs(collection(db, "bookings"));
+        const bookings = [];
+        
+        bookingsSnapshot.forEach((doc) => {
+            const data = doc.data();
+            bookings.push({
+                date: data.date,
+                lead: data.lead,
+                type: data.type,
+                client: data.client
+            });
+        });
+        
+        // Sort bookings by date
+        bookings.sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        // Generate CSV content
+        const csvContent = convertToCSV(bookings);
+        
+        // Generate filename with current date
+        const today = new Date().toISOString().split('T')[0];
+        const filename = `bookings_${today}.csv`;
+        
+        // Download the CSV file
+        downloadCSV(csvContent, filename);
+    } catch (error) {
+        console.error("Error exporting bookings:", error);
+        alert("Error exporting bookings. Please try again.");
+    }
 }); 
