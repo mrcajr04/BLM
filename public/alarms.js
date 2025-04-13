@@ -73,7 +73,12 @@ function renderAlarms() {
         
         const contentHtml = `
             <div class="flex-1">
-                <div class="font-medium">${alarm.leadName} / ${alarm.clientName}</div>
+                <div class="font-medium flex items-center">
+                    ${alarm.leadName} / ${alarm.clientName}
+                    <button class="ml-2 text-blue-600 hover:text-blue-900 copy-names-btn" title="Copy names">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
                 <div class="text-sm text-gray-500">Set for ${formatTime(alarmTime)}</div>
             </div>
             <div class="flex items-center gap-6">
@@ -89,6 +94,21 @@ function renderAlarms() {
         `;
         
         alarmElement.innerHTML = contentHtml;
+
+        // Add copy functionality
+        const copyBtn = alarmElement.querySelector('.copy-names-btn');
+        copyBtn.addEventListener('click', (e) => {
+            const textToCopy = `${alarm.leadName} / ${alarm.clientName}`;
+            navigator.clipboard.writeText(textToCopy);
+            
+            // Visual feedback
+            const originalIcon = copyBtn.innerHTML;
+            copyBtn.innerHTML = '<i class="fas fa-check"></i>';
+            setTimeout(() => {
+                copyBtn.innerHTML = originalIcon;
+            }, 1000);
+        });
+
         alarmsList.appendChild(alarmElement);
     });
 }

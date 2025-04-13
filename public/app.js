@@ -24,7 +24,11 @@ const logCallBtn = document.getElementById('log-call-btn');
 const templateModal = document.getElementById('template-modal');
 const reviewModal = document.getElementById('review-modal');
 const deleteModal = document.getElementById('delete-modal');
+const deleteAllModal = document.getElementById('delete-all-modal');
 const confirmDeleteBtn = document.getElementById('confirm-delete');
+const confirmDeleteAllBtn = document.getElementById('confirm-delete-all');
+const deleteConfirmationInput = document.getElementById('delete-confirmation-input');
+const deleteAllBtn = document.getElementById('delete-all-btn');
 const templatesTableBody = document.getElementById('templates-table-body');
 const reviewsTableBody = document.getElementById('reviews-table-body');
 const bookingsTableBody = document.getElementById('bookings-table-body');
@@ -35,6 +39,11 @@ const userInfo = document.getElementById('user-info');
 const welcomeMessage = document.getElementById('welcome-message');
 const newBookingBtn = document.getElementById('new-booking-btn');
 const downloadCsvBtn = document.getElementById('download-csv-btn');
+// Dashboard Elements
+const todayBookingsEl = document.getElementById('today-bookings');
+const averageBookingsEl = document.getElementById('average-bookings');
+const daysWorkedEl = document.getElementById('days-worked');
+const topClientEl = document.getElementById('top-client');
 
 // Tab Switching
 document.querySelectorAll('.tab-button').forEach(button => {
@@ -56,12 +65,34 @@ document.querySelectorAll('.tab-button').forEach(button => {
 // Modal Management
 function showModal(modal) {
     modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden'; // Prevent background scrolling
+    
+    // Handle clicking outside the modal to close
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal || e.target.classList.contains('modal-close')) {
+            hideModal(modal);
+        }
+    });
+
+    // Handle Escape key to close modal
+    document.addEventListener('keydown', function escapeHandler(e) {
+        if (e.key === 'Escape') {
+            hideModal(modal);
+            document.removeEventListener('keydown', escapeHandler);
+        }
+    });
 }
 
 function hideModal(modal) {
     modal.classList.add('hidden');
+    document.body.style.overflow = ''; // Restore scrolling
     if (modal.querySelector('form')) {
         modal.querySelector('form').reset();
+    }
+    // Reset delete confirmation if it's the delete-all modal
+    if (modal.id === 'delete-all-modal') {
+        deleteConfirmationInput.value = '';
+        confirmDeleteAllBtn.disabled = true;
     }
 }
 
@@ -139,6 +170,53 @@ function clearTableData() {
     // Clear reminders tab content when implemented
 }
 
+function updateDashboardStats(bookings) {
+    // Get today's date in YYYY-MM-DD format
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayFormatted = `${year}-${month}-${day}`;
+    
+    // Calculate today's bookings
+    const todayBookings = bookings.filter(booking => booking.date === todayFormatted).length;
+    todayBookingsEl.textContent = todayBookings;
+    
+    // Calculate days worked this month and average bookings
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    const thisMonthBookings = bookings.filter(booking => {
+        const bookingDate = new Date(booking.date);
+        return bookingDate.getMonth() === currentMonth && bookingDate.getFullYear() === currentYear;
+    });
+    
+    // Get unique dates worked this month
+    const daysWorked = new Set(thisMonthBookings.map(booking => booking.date)).size;
+    daysWorkedEl.textContent = daysWorked;
+    
+    // Calculate average daily bookings
+    const averageBookings = daysWorked > 0 ? (thisMonthBookings.length / daysWorked).toFixed(1) : '0';
+    averageBookingsEl.textContent = averageBookings;
+    
+    // Find most booked client
+    const clientCounts = {};
+    bookings.forEach(booking => {
+        if (booking.client) {
+            clientCounts[booking.client] = (clientCounts[booking.client] || 0) + 1;
+        }
+    });
+    
+    const topClient = Object.entries(clientCounts)
+        .sort(([,a], [,b]) => b - a)[0];
+    
+    topClientEl.textContent = topClient ? topClient[0] : '-';
+    
+    // Debug logging
+    console.log('Today formatted:', todayFormatted);
+    console.log('Bookings dates:', bookings.map(b => b.date));
+    console.log('Today\'s bookings count:', todayBookings);
+}
+
 function setupUserData(user) {
     // Set up real-time listeners for user-specific data
     const templatesQuery = query(
@@ -176,6 +254,11 @@ function setupUserData(user) {
         const sortedDocs = snapshot.docs.sort((a, b) => {
             return a.data().createdAt.toMillis() - b.data().createdAt.toMillis();
         });
+        
+        // Extract booking data for dashboard
+        const bookings = sortedDocs.map(doc => doc.data());
+        updateDashboardStats(bookings);
+        
         sortedDocs.forEach(doc => {
             bookingsTableBody.appendChild(renderBooking(doc));
         });
@@ -409,22 +492,130 @@ async function updateBooking(bookingId, field, value) {
     }
 }
 
+// Client list for autocomplete
+const clientsList = [
+    "The Disc Docs",
+    "Hyper Health Wellness Center",
+    "Georgian Bay Integrative Medicine",
+    "Gateway Rehab and Wellness Center",
+    "New Me Health",
+    "Denton Performance & Injury Clinic",
+    "Chiropractic Health Club",
+    "Great Life Medical PC",
+    "KC Health Solutions",
+    "Advanced Chiropractic",
+    "Harris Chiropractic",
+    "Crossroads Care Center",
+    "Cryobarics",
+    "Joint & Spine Rehabilitation",
+    "Kepler Family Chiropractic",
+    "Integrative Brain & Body Family Wellness Center",
+    "Peak Physical Medicine",
+    "Milton Spine",
+    "Rozenhart Family Chiropractic",
+    "Strive Spinal Health",
+    "Back on Track Chiropractic and Wellness",
+    "Westwood Total Health",
+    "The Ottawa Clinic",
+    "New Millennium Medical",
+    "Hughes Health",
+    "Rooted Chiropractic",
+    "Men's Health Athens",
+    "Nircel Beauty and Weight-loss",
+    "Healthy Solutions MD",
+    "Mercer Island Chiropractic",
+    "Essential Family Chiro",
+    "Life Family Chiropractic",
+    "Cummins Chiropractic",
+    "Agape Chiropractic",
+    "Pathway to Wellness",
+    "Elk River Medical",
+    "Pamer Chiropractic Health Center"
+];
+
+function createAutocompleteDropdown(input) {
+    // Create dropdown container
+    const dropdownContainer = document.createElement('div');
+    dropdownContainer.className = 'absolute z-50 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto mt-1 hidden';
+    input.parentNode.style.position = 'relative';
+    input.parentNode.appendChild(dropdownContainer);
+
+    // Function to select a client
+    const selectClient = (client) => {
+        input.value = client;
+        dropdownContainer.classList.add('hidden');
+        // Trigger change event to save the value
+        input.dispatchEvent(new Event('change'));
+    };
+
+    // Add input event listener
+    input.addEventListener('input', (e) => {
+        const value = e.target.value.toLowerCase();
+        dropdownContainer.innerHTML = '';
+        
+        if (value.length < 1) {
+            dropdownContainer.classList.add('hidden');
+            return;
+        }
+
+        const matches = clientsList.filter(client => 
+            client.toLowerCase().includes(value)
+        );
+
+        if (matches.length > 0) {
+            dropdownContainer.classList.remove('hidden');
+            matches.forEach(client => {
+                const div = document.createElement('div');
+                div.className = 'px-4 py-2 cursor-pointer hover:bg-gray-100 text-sm text-gray-700';
+                div.textContent = client;
+                div.addEventListener('click', () => selectClient(client));
+                dropdownContainer.appendChild(div);
+            });
+        } else {
+            dropdownContainer.classList.add('hidden');
+        }
+    });
+
+    // Add keydown event listener for Enter key
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault(); // Prevent form submission if inside a form
+            const value = input.value.toLowerCase();
+            const matches = clientsList.filter(client => 
+                client.toLowerCase().includes(value)
+            );
+            
+            if (matches.length === 1) {
+                selectClient(matches[0]);
+            }
+        }
+    });
+
+    // Hide dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!input.contains(e.target) && !dropdownContainer.contains(e.target)) {
+            dropdownContainer.classList.add('hidden');
+        }
+    });
+
+    // Show dropdown when focusing on input
+    input.addEventListener('focus', () => {
+        if (input.value.length > 0) {
+            dropdownContainer.classList.remove('hidden');
+        }
+    });
+}
+
+// Modify the renderBooking function to add autocomplete
 function renderBooking(doc) {
     const tr = document.createElement('tr');
     const data = doc.data();
     
-    // Get today's date in YYYY-MM-DD format
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    const todayFormatted = `${year}-${month}-${day}`;
-    
     tr.innerHTML = `
         <td class="px-6 py-4 whitespace-nowrap">
             <input type="date" 
-                   class="text-sm text-gray-900 bg-gray-50 border-b border-transparent cursor-not-allowed" 
-                   value="${todayFormatted}"
+                   class="text-sm text-gray-900 bg-transparent border-b border-transparent cursor-not-allowed" 
+                   value="${data.date}"
                    data-field="date"
                    disabled>
         </td>
@@ -442,7 +633,7 @@ function renderBooking(doc) {
                 <option value="prepay" ${data.type === 'prepay' ? 'selected' : ''}>Prepay</option>
             </select>
         </td>
-        <td class="px-6 py-4 whitespace-nowrap">
+        <td class="px-6 py-4 whitespace-nowrap relative">
             <input type="text" 
                    class="text-sm text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none w-full" 
                    value="${data.client}"
@@ -450,7 +641,7 @@ function renderBooking(doc) {
                    data-field="client">
         </td>
         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-            <button class="text-red-600 hover:text-red-900 delete-booking">
+            <button class="text-red-600 hover:text-red-900 delete-btn">
                 <i class="fas fa-trash"></i>
             </button>
         </td>
@@ -463,8 +654,12 @@ function renderBooking(doc) {
         });
     });
 
+    // Add autocomplete to client input
+    const clientInput = tr.querySelector('input[data-field="client"]');
+    createAutocompleteDropdown(clientInput);
+
     // Add delete event listener
-    tr.querySelector('.delete-booking').addEventListener('click', () => {
+    tr.querySelector('.delete-btn').addEventListener('click', () => {
         currentDeleteId = doc.id;
         currentDeleteType = 'booking';
         showModal(deleteModal);
@@ -624,5 +819,44 @@ downloadCsvBtn.addEventListener('click', async () => {
     } catch (error) {
         console.error("Error exporting bookings:", error);
         alert("Error exporting bookings. Please try again.");
+    }
+});
+
+// Delete All functionality
+deleteAllBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    showModal(deleteAllModal);
+});
+
+// Make sure clicks inside the modal content don't propagate to the overlay
+document.querySelectorAll('.modal > div > div').forEach(modalContent => {
+    modalContent.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+});
+
+// Delete confirmation input handler
+deleteConfirmationInput.addEventListener('input', (e) => {
+    confirmDeleteAllBtn.disabled = e.target.value !== 'DELETE';
+});
+
+// Delete all confirmation handler
+confirmDeleteAllBtn.addEventListener('click', async () => {
+    if (!auth.currentUser) return;
+    
+    try {
+        const bookingsQuery = query(
+            collection(db, "bookings"),
+            where("userId", "==", auth.currentUser.uid)
+        );
+        
+        const snapshot = await getDocs(bookingsQuery);
+        const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+        
+        await Promise.all(deletePromises);
+        hideModal(deleteAllModal);
+    } catch (error) {
+        console.error("Error deleting all bookings:", error);
+        alert("Error deleting bookings. Please try again.");
     }
 }); 
